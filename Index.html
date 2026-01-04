@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>游龙引擎 · YoLoong Lab</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+:root{
+  --bg: radial-gradient(1200px 800px at 20% 10%, #e9f3ff 0%, #f2eeff 45%, #eef6ff 100%);
+  --card-bg: rgba(255,255,255,0.82);
+  --border: rgba(150,170,255,0.35);
+  --blue:#7bb8ff;
+  --purple:#b79cff;
+  --text:#1f2937;
+  --muted:#6b7280;
+  --shadow: 0 18px 50px rgba(120,140,255,.25);
+  --radius:18px;
+}
+
+*{box-sizing:border-box}
+html,body{
+  margin:0;height:100%;
+  background:var(--bg);
+  font-family: ui-sans-serif, system-ui, -apple-system,
+               "PingFang SC","Microsoft YaHei","Segoe UI",Roboto;
+  color:var(--text);
+}
+
+body{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+#wrap{
+  width:min(1100px, 92vw);
+}
+
+header{
+  margin-bottom:40px;
+}
+header h1{
+  font-size:32px;
+  margin:0;
+  letter-spacing:0.04em;
+}
+header h1 span{
+  background:linear-gradient(135deg,var(--blue),var(--purple));
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+}
+header p{
+  margin-top:12px;
+  color:var(--muted);
+  max-width:640px;
+}
+
+/* ===== 卡片区 ===== */
+.grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap:26px;
+}
+
+.card{
+  background:var(--card-bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:22px;
+  box-shadow:var(--shadow);
+  position:relative;
+  overflow:hidden;
+  cursor:pointer;
+  transition:transform .35s ease, box-shadow .35s ease;
+}
+
+.card::before{
+  content:"";
+  position:absolute;
+  inset:-40%;
+  background:radial-gradient(circle at var(--x,50%) var(--y,50%),
+    rgba(183,156,255,.35),
+    transparent 60%);
+  opacity:0;
+  transition:opacity .35s ease;
+}
+
+.card:hover{
+  transform:translateY(-6px);
+  box-shadow:0 28px 80px rgba(120,140,255,.35);
+}
+.card:hover::before{opacity:1}
+
+.card h2{
+  margin:0 0 8px;
+  font-size:20px;
+}
+.card p{
+  margin:0;
+  font-size:13px;
+  color:var(--muted);
+  line-height:1.6;
+}
+
+.tag{
+  display:inline-block;
+  margin-top:12px;
+  padding:4px 10px;
+  font-size:11px;
+  border-radius:999px;
+  background:rgba(120,140,255,.12);
+  border:1px solid var(--border);
+}
+
+/* ===== 底部 ===== */
+footer{
+  margin-top:42px;
+  font-size:12px;
+  color:var(--muted);
+  display:flex;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:10px;
+}
+footer span{
+  opacity:.8;
+}
+</style>
+</head>
+
+<body>
+<div id="wrap">
+
+  <header>
+    <h1><span>游龙引擎</span> · YoLoong Lab</h1>
+    <p>
+      小小游龙的个人视觉系统实验室。<br>
+      这里是一个持续生长的 GPU 视觉、交互装置与个人系统集合。
+    </p>
+  </header>
+
+  <section class="grid">
+
+    <!-- 广告大屏 -->
+    <div class="card" onclick="go('Advertising_screen.html')">
+      <h2>GPU 粒子广告大屏</h2>
+      <p>
+        面向真实商用场景的文案闪耀系统。<br>
+        WebGL2 · GPU 粒子 · 可配置播放逻辑。
+      </p>
+      <div class="tag">Advertising / Display</div>
+    </div>
+
+    <!-- 虫洞 -->
+    <div class="card" onclick="go('NeonWormhole_Pro.html')">
+      <h2>Neon Wormhole · PRO</h2>
+      <p>
+        多层统一同向螺旋虫洞。<br>
+        Bloom · 色差 · Glitch · 实时调参。
+      </p>
+      <div class="tag">GPU Art / Procedural</div>
+    </div>
+
+    <!-- 个人 OS -->
+    <div class="card" onclick="go('PersonalOS_Home.html')">
+      <h2>个人 OS · 首页</h2>
+      <p>
+        本地优先的个人信息中枢。<br>
+        时间 · 任务 · 专注 · 环境感知。
+      </p>
+      <div class="tag">Personal System</div>
+    </div>
+
+  </section>
+
+  <footer>
+    <span>© YoLoong Lab</span>
+    <span>Designed & Built by 小小游龙</span>
+  </footer>
+
+</div>
+
+<script>
+/* 光标跟随高光 */
+document.querySelectorAll('.card').forEach(card=>{
+  card.addEventListener('mousemove',e=>{
+    const r=card.getBoundingClientRect();
+    card.style.setProperty('--x',((e.clientX-r.left)/r.width*100)+'%');
+    card.style.setProperty('--y',((e.clientY-r.top)/r.height*100)+'%');
+  });
+});
+
+function go(url){
+  window.location.href=url;
+}
+</script>
+
+</body>
+</html>

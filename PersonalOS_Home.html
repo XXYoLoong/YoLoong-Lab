@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>个人 OS · 首页</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+/* =======================
+   浅蓝 · 浅紫 主题
+======================= */
+:root{
+  --bg-grad: radial-gradient(1200px 800px at 20% 10%, #e8f4ff 0%, #f3efff 45%, #eef6ff 100%);
+  --panel-bg: rgba(255,255,255,0.78);
+  --panel-border: rgba(160,180,255,0.35);
+  --accent: #7bb8ff;
+  --accent2:#b79cff;
+  --text:#1f2937;
+  --muted:#6b7280;
+  --ok:#16a34a;
+  --warn:#f59e0b;
+  --shadow: 0 10px 30px rgba(120,140,255,.18);
+  --radius:14px;
+}
+
+*{box-sizing:border-box}
+html,body{
+  margin:0;height:100%;
+  background:var(--bg-grad);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+               "PingFang SC","Microsoft YaHei","Segoe UI",Roboto,Arial;
+  color:var(--text);
+}
+
+/* =======================
+   布局
+======================= */
+#app{
+  display:grid;
+  grid-template-columns:280px 1fr 320px;
+  height:100%;
+  backdrop-filter: blur(6px);
+}
+
+aside, section.right{
+  background:var(--panel-bg);
+  border:1px solid var(--panel-border);
+  box-shadow:var(--shadow);
+  padding:16px;
+}
+
+aside{border-right:none;border-radius:0 var(--radius) var(--radius) 0}
+section.right{border-left:none;border-radius:var(--radius) 0 0 var(--radius)}
+
+main{
+  position:relative;
+  overflow:hidden;
+}
+
+/* =======================
+   通用组件
+======================= */
+h1,h2,h3{margin:0 0 10px;font-weight:600}
+h1{font-size:18px}
+h2{font-size:15px}
+h3{font-size:13px;color:var(--muted)}
+
+.card{
+  background:rgba(255,255,255,0.85);
+  border:1px solid var(--panel-border);
+  border-radius:var(--radius);
+  padding:14px;
+  margin-bottom:14px;
+  box-shadow:var(--shadow);
+}
+
+.small{font-size:12px;color:var(--muted)}
+.row{display:flex;gap:8px;align-items:center}
+.space{height:10px}
+
+button{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;
+  color:white;
+  border-radius:10px;
+  padding:6px 12px;
+  cursor:pointer;
+  font-size:12px;
+  box-shadow:0 6px 18px rgba(120,140,255,.35);
+}
+button.secondary{
+  background:rgba(255,255,255,0.7);
+  color:var(--text);
+  border:1px solid var(--panel-border);
+  box-shadow:none;
+}
+button:hover{opacity:.9}
+
+input,textarea{
+  width:100%;
+  background:rgba(255,255,255,0.9);
+  border:1px solid var(--panel-border);
+  border-radius:8px;
+  padding:6px;
+  font-size:13px;
+}
+
+/* =======================
+   左侧
+======================= */
+.status{
+  display:flex;align-items:center;gap:6px;
+}
+.dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--ok);
+  box-shadow:0 0 8px rgba(34,197,94,.6);
+}
+
+/* 任务 */
+.task{
+  display:flex;align-items:center;gap:6px;
+  margin-bottom:6px;
+}
+.task.done span{
+  text-decoration:line-through;
+  color:var(--muted);
+}
+
+/* =======================
+   中央 Canvas
+======================= */
+canvas{
+  width:100%;
+  height:100%;
+  display:block;
+}
+
+/* =======================
+   快速记录浮层
+======================= */
+#quickOverlay{
+  position:fixed;
+  inset:0;
+  background:rgba(240,245,255,.6);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  backdrop-filter: blur(8px);
+}
+#quickOverlay .box{
+  width:420px;
+  background:rgba(255,255,255,0.95);
+  border:1px solid var(--panel-border);
+  border-radius:var(--radius);
+  padding:18px;
+  box-shadow:var(--shadow);
+}
+</style>
+</head>
+
+<body>
+  <!-- 返回首页 · 隐式热区触发（可配置位置） -->
+<div id="home-hotzone"></div>
+<div id="home-btn" onclick="goHome()">← 首页</div>
+
+<style>
+/* ===== 配置区域 ===== */
+/* 可选值：top-left / bottom-left */
+:root{
+  --home-pos: bottom-left;
+}
+
+/* ===== 热区 ===== */
+#home-hotzone{
+  position:fixed;
+  z-index:9998;
+  width:90px;
+  height:90px;
+}
+
+/* ===== 按钮 ===== */
+#home-btn{
+  position:fixed;
+  z-index:9999;
+
+  padding:8px 16px;
+  font-size:13px;
+  font-weight:500;
+  border-radius:999px;
+  cursor:pointer;
+  user-select:none;
+
+  background:linear-gradient(135deg,#7bb8ff,#b79cff);
+  color:#ffffff;
+  box-shadow:0 10px 30px rgba(120,140,255,.35);
+
+  opacity:0;
+  pointer-events:none;
+  transform:scale(.96);
+
+  transition:
+    opacity .35s ease,
+    transform .35s ease,
+    box-shadow .35s ease;
+}
+
+#home-btn.show{
+  opacity:1;
+  pointer-events:auto;
+  transform:scale(1);
+}
+
+#home-btn:hover{
+  box-shadow:0 16px 46px rgba(120,140,255,.45);
+}
+
+/* ===== 左上角模式 ===== */
+:root[style*="top-left"] #home-hotzone{
+  top:0; left:0;
+}
+:root[style*="top-left"] #home-btn{
+  top:20px; left:20px;
+  transform:translateY(-6px) scale(.96);
+}
+:root[style*="top-left"] #home-btn.show{
+  transform:translateY(0) scale(1);
+}
+
+/* ===== 左下角模式 ===== */
+:root[style*="bottom-left"] #home-hotzone{
+  bottom:0; left:0;
+}
+:root[style*="bottom-left"] #home-btn{
+  bottom:20px; left:20px;
+  transform:translateY(6px) scale(.96);
+}
+:root[style*="bottom-left"] #home-btn.show{
+  transform:translateY(0) scale(1);
+}
+</style>
+
+<script>
+const hotzone = document.getElementById("home-hotzone");
+const homeBtn = document.getElementById("home-btn");
+let hideTimer = null;
+
+// 显示
+hotzone.addEventListener("mouseenter", ()=>{
+  clearTimeout(hideTimer);
+  homeBtn.classList.add("show");
+});
+
+// 延迟隐藏
+function scheduleHide(){
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(()=>{
+    homeBtn.classList.remove("show");
+  }, 800);
+}
+
+hotzone.addEventListener("mouseleave", scheduleHide);
+homeBtn.addEventListener("mouseleave", scheduleHide);
+homeBtn.addEventListener("mouseenter", ()=>clearTimeout(hideTimer));
+
+// 跳转
+function goHome(){
+  window.location.href = "index.html";
+}
+
+// ESC 快捷返回（推荐）
+addEventListener("keydown", e=>{
+  if(e.key === "Escape") goHome();
+});
+</script>
+
+<div id="app">
+  <!-- 左侧 -->
+  <aside>
+    <h1>个人 OS</h1>
+    <div class="status small">
+      <div class="dot"></div> 系统状态：在线
+    </div>
+
+    <div class="space"></div>
+
+    <div class="card">
+      <h2>时间</h2>
+      <div id="timeNow"></div>
+      <div class="small">今日进度</div>
+      <progress id="dayProgress" max="100" value="0" style="width:100%"></progress>
+    </div>
+
+    <div class="card">
+      <h2>今日三件事</h2>
+      <div id="tasks"></div>
+      <button class="secondary" id="addTask">添加任务</button>
+    </div>
+
+    <div class="card">
+      <h2>专注计时</h2>
+      <div id="timer" style="font-size:20px;margin-bottom:8px">00:00</div>
+      <div class="row">
+        <button onclick="startTimer(25)">25 分钟</button>
+        <button onclick="startTimer(45)">45 分钟</button>
+        <button class="secondary" onclick="resetTimer()">重置</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 中央 -->
+  <main>
+    <canvas id="gl"></canvas>
+  </main>
+
+  <!-- 右侧 -->
+  <section class="right">
+    <div class="card">
+      <h2>系统负载</h2>
+      <div>帧率：<span id="fps">--</span></div>
+      <div class="small">渲染压力：<span id="load">正常</span></div>
+    </div>
+
+    <div class="card">
+      <h2>环境状态</h2>
+      <div>网络：<span id="net"></span></div>
+      <div>电量：<span id="bat"></span></div>
+    </div>
+
+    <div class="card">
+      <h2>快捷入口</h2>
+      <div id="links"></div>
+      <button class="secondary" id="addLink">添加链接</button>
+    </div>
+
+    <div class="card">
+      <h2>今日记录</h2>
+      <div id="log"></div>
+    </div>
+  </section>
+</div>
+
+<!-- 快速记录 -->
+<div id="quickOverlay">
+  <div class="box">
+    <h2>快速记录</h2>
+    <textarea id="quickText" rows="4" placeholder="记录一个想法…"></textarea>
+    <div class="space"></div>
+    <button id="saveQuick">保存</button>
+  </div>
+</div>
+
+<script>
+/* =======================
+   本地存储工具
+======================= */
+const store={
+  get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},
+  set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))
+};
+
+/* =======================
+   时间
+======================= */
+function updateTime(){
+  const n=new Date();
+  timeNow.textContent=n.toLocaleString();
+  const s=new Date(n);s.setHours(0,0,0,0);
+  const e=new Date(n);e.setHours(24,0,0,0);
+  dayProgress.value=(n-s)/(e-s)*100;
+}
+setInterval(updateTime,1000);updateTime();
+
+/* =======================
+   任务
+======================= */
+let tasks=store.get("tasks",[]);
+function renderTasks(){
+  tasksEl.innerHTML="";
+  tasks.slice(0,3).forEach(t=>{
+    const d=document.createElement("div");
+    d.className="task"+(t.done?" done":"");
+    d.innerHTML=`<input type="checkbox" ${t.done?"checked":""}>
+                 <span contenteditable>${t.text}</span>`;
+    d.querySelector("input").onchange=e=>{t.done=e.target.checked;saveTasks()};
+    d.querySelector("span").onblur=e=>{t.text=e.target.textContent;saveTasks()};
+    tasksEl.appendChild(d);
+  });
+}
+function saveTasks(){store.set("tasks",tasks);renderTasks()}
+addTask.onclick=()=>{tasks.push({text:"新任务",done:false});saveTasks()}
+const tasksEl=document.getElementById("tasks");
+renderTasks();
+
+/* =======================
+   专注计时
+======================= */
+let timerInt=null,remain=0;
+function startTimer(m){
+  resetTimer();remain=m*60;tick();
+  timerInt=setInterval(tick,1000);
+}
+function tick(){
+  if(remain<=0){clearInterval(timerInt);return}
+  remain--;
+  timer.textContent=
+    String(Math.floor(remain/60)).padStart(2,"0")+":"+
+    String(remain%60).padStart(2,"0");
+}
+function resetTimer(){clearInterval(timerInt);timer.textContent="00:00"}
+
+/* =======================
+   快速记录
+======================= */
+addEventListener("keydown",e=>{
+  if(e.ctrlKey&&e.key==="Enter"){
+    quickOverlay.style.display="flex";
+    quickText.focus();
+  }
+});
+saveQuick.onclick=()=>{
+  const logs=store.get("logs",[]);
+  logs.push({t:Date.now(),text:quickText.value});
+  store.set("logs",logs);
+  quickText.value="";
+  quickOverlay.style.display="none";
+  renderLog();
+};
+
+/* =======================
+   日志
+======================= */
+function renderLog(){
+  const logs=store.get("logs",[]);
+  log.innerHTML="";
+  logs.slice(-5).reverse().forEach(l=>{
+    const d=document.createElement("div");
+    d.className="small";
+    d.textContent=new Date(l.t).toLocaleTimeString()+" · "+l.text;
+    log.appendChild(d);
+  });
+}
+renderLog();
+
+/* =======================
+   快捷链接
+======================= */
+let links=store.get("links",[
+  {name:"GitHub",url:"https://github.com/XXYoLoong"},
+  {name:"YoLoong Lab",url:"https://github.com/XXYoLoong/YoLoong-Lab.git"}
+]);
+function renderLinks(){
+  linksEl.innerHTML="";
+  links.forEach(l=>{
+    const a=document.createElement("a");
+    a.href=l.url;a.textContent=l.name;a.target="_blank";
+    a.style.display="block";
+    linksEl.appendChild(a);
+  });
+}
+addLink.onclick=()=>{
+  const n=prompt("名称");const u=prompt("链接");
+  if(n&&u){links.push({name:n,url:u});store.set("links",links);renderLinks()}
+};
+const linksEl=document.getElementById("links");
+renderLinks();
+
+/* =======================
+   环境
+======================= */
+net.textContent=navigator.onLine?"在线":"离线";
+window.addEventListener("online",()=>net.textContent="在线");
+window.addEventListener("offline",()=>net.textContent="离线");
+if(navigator.getBattery){
+  navigator.getBattery().then(b=>{
+    bat.textContent=Math.round(b.level*100)+"%";
+    b.onlevelchange=()=>bat.textContent=Math.round(b.level*100)+"%";
+  });
+}else bat.textContent="不支持";
+
+/* =======================
+   WebGL 背景（柔和渐变流动）
+======================= */
+const canvas=document.getElementById("gl");
+const gl=canvas.getContext("webgl");
+function resize(){
+  canvas.width=canvas.clientWidth;
+  canvas.height=canvas.clientHeight;
+  gl.viewport(0,0,canvas.width,canvas.height);
+}
+resize();addEventListener("resize",resize);
+
+const vs=`attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}`;
+const fs=`precision highp float;
+uniform float t;
+void main(){
+  vec2 uv=gl_FragCoord.xy/vec2(${window.innerWidth.toFixed(1)},${window.innerHeight.toFixed(1)});
+  float v=0.5+0.5*sin(t+uv.x*8.0+uv.y*6.0);
+  vec3 c=mix(vec3(0.75,0.86,1.0),vec3(0.85,0.80,1.0),v);
+  gl_FragColor=vec4(c,1.0);
+}`;
+function sh(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);return s}
+const prog=gl.createProgram();
+gl.attachShader(prog,sh(gl.VERTEX_SHADER,vs));
+gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,fs));
+gl.linkProgram(prog);gl.useProgram(prog);
+const buf=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+const loc=gl.getAttribLocation(prog,"p");
+gl.enableVertexAttribArray(loc);
+gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+const ut=gl.getUniformLocation(prog,"t");
+
+let last=performance.now(),frames=0;
+function loop(now){
+  gl.uniform1f(ut,now*0.001);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  frames++;
+  if(now-last>1000){
+    fps.textContent=frames;
+    load.textContent=frames<40?"偏高":"正常";
+    frames=0;last=now;
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,957 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GPU 粒子广告大屏 · 文案闪耀</title>
+<style>
+  html,body{margin:0;height:100%;background:#050608;overflow:hidden;font-family:system-ui,-apple-system,BlinkMacSystemFont;}
+  canvas{width:100%;height:100%;display:block;}
+
+  /* ===== 设置按钮 ===== */
+  #gear{
+    position:fixed; top:16px; right:16px;
+    width:38px; height:38px; border-radius:999px;
+    background:rgba(30,32,38,0.78);
+    border:1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(8px);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; z-index:20;
+    user-select:none;
+  }
+  #gear span{color:#9ca3af;font-size:18px;line-height:1;}
+
+  /* ===== 面板 ===== */
+  #panel{
+    position:fixed; top:60px; right:16px;
+    width:320px;
+    background:rgba(18,20,26,0.90);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:14px;
+    padding:14px;
+    box-shadow:0 22px 60px rgba(0,0,0,0.55);
+    backdrop-filter: blur(10px);
+    color:#e5e7eb;
+    font-size:13px;
+    display:none;
+    z-index:21;
+  }
+  #panel h3{margin:0 0 10px;font-size:14px;font-weight:650;}
+  #panel label{display:block;margin-top:10px;font-size:12px;color:#9ca3af;}
+  #panel textarea,#panel input{
+    width:100%;
+    margin-top:6px;
+    background:#0b0e14;
+    border:1px solid #1f2937;
+    color:#e5e7eb;
+    border-radius:10px;
+    padding:10px;
+    box-sizing:border-box;
+    outline:none;
+    font-size:13px;
+  }
+  #panel textarea{min-height:140px;resize:vertical;}
+  #panel .row{display:flex;gap:10px;margin-top:10px;}
+  #panel .row > div{flex:1;}
+  #panel button{
+    width:100%;
+    margin-top:12px;
+    background:#111827;
+    border:1px solid #374151;
+    color:#e5e7eb;
+    border-radius:12px;
+    padding:10px;
+    cursor:pointer;
+    font-weight:600;
+  }
+  #panel button:hover{background:#1f2937;}
+  #hint{
+    position:fixed; left:16px; bottom:16px;
+    color:rgba(229,231,235,0.45);
+    font-size:12px;
+    z-index:15;
+    user-select:none;
+    pointer-events:none;
+  }
+</style>
+</head>
+<body>
+  <!-- 返回首页 · 悬浮热区触发 -->
+<div id="home-hotzone"></div>
+
+<div id="home-btn" onclick="goHome()">
+  ← 首页
+</div>
+
+<style>
+/* ===== 左上角热区（不可见） ===== */
+#home-hotzone{
+  position:fixed;
+  top:0;
+  left:0;
+  width:80px;
+  height:80px;
+  z-index:9998;
+}
+
+/* ===== 返回按钮 ===== */
+#home-btn{
+  position:fixed;
+  top:20px;
+  left:20px;
+  z-index:9999;
+
+  padding:8px 16px;
+  font-size:13px;
+  font-weight:500;
+  border-radius:999px;
+
+  background:linear-gradient(135deg,#7bb8ff,#b79cff);
+  color:#ffffff;
+  box-shadow:0 10px 30px rgba(120,140,255,.35);
+
+  cursor:pointer;
+  user-select:none;
+
+  /* 初始隐藏状态 */
+  opacity:0;
+  pointer-events:none;
+  transform:translateY(-6px) scale(.96);
+
+  transition:
+    opacity .35s ease,
+    transform .35s ease,
+    box-shadow .35s ease;
+}
+
+/* 显示状态 */
+#home-btn.show{
+  opacity:1;
+  pointer-events:auto;
+  transform:translateY(0) scale(1);
+}
+
+/* 悬停细节 */
+#home-btn:hover{
+  box-shadow:0 16px 46px rgba(120,140,255,.45);
+  transform:translateY(-1px) scale(1.02);
+}
+
+#home-btn:active{
+  transform:translateY(0) scale(.98);
+}
+</style>
+
+<script>
+const hotzone = document.getElementById("home-hotzone");
+const homeBtn = document.getElementById("home-btn");
+
+let hideTimer = null;
+
+// 鼠标进入左上角热区 → 显示
+hotzone.addEventListener("mouseenter", ()=>{
+  clearTimeout(hideTimer);
+  homeBtn.classList.add("show");
+});
+
+// 鼠标离开按钮或热区 → 延迟隐藏
+function scheduleHide(){
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(()=>{
+    homeBtn.classList.remove("show");
+  }, 800);
+}
+
+hotzone.addEventListener("mouseleave", scheduleHide);
+homeBtn.addEventListener("mouseleave", scheduleHide);
+homeBtn.addEventListener("mouseenter", ()=>clearTimeout(hideTimer));
+
+// 跳转首页
+function goHome(){
+  window.location.href = "index.html";
+}
+
+// ESC 也可返回（可选，推荐）
+addEventListener("keydown", e=>{
+  if(e.key === "Escape") goHome();
+});
+</script>
+
+<canvas id="gl"></canvas>
+
+<div id="gear" title="设置"><span>⚙</span></div>
+
+<div id="panel">
+  <h3>广告文案设置</h3>
+
+  <label>播放文字（每行一条）</label>
+  <textarea id="textList">既
+见
+游
+龙
+为
+何
+不
+拜</textarea>
+
+  <div class="row">
+    <div>
+      <label>切换间隔（秒）</label>
+      <input id="interval" type="number" value="1" step="0.1" min="0.1"/>
+    </div>
+    <div>
+      <label>粒子档位（1/2/3）</label>
+      <input id="quality" type="number" value="2" min="1" max="3" step="1"/>
+    </div>
+  </div>
+
+  <label>结束语（可选，播完后粒子显示这一行）</label>
+  <input id="ending" placeholder="例如：某某品牌 · 引领未来"/>
+
+  <button id="apply">应用并重置（点击任意位置开始播放）</button>
+</div>
+
+<div id="hint">点击任意位置开始播放｜键盘 1/2/3 切档</div>
+
+<script>
+/* ============================================================
+   广告播放控制层
+   - 点击任意位置：开始播放
+   - 每 interval 秒：切换一条
+   - 播完：可选结束语，否则清空字形，保留气场
+   ============================================================ */
+let config = { texts: [], interval: 1, ending: "" };
+let playing = false;
+let playIndex = 0;
+let timer = null;
+let startedOnce = false;
+
+function stopTimer(){
+  if(timer){ clearInterval(timer); timer = null; }
+}
+function parseConfig(){
+  const list = document.getElementById("textList").value
+    .split("\n").map(s=>s.trim()).filter(Boolean);
+
+  config.texts = list;
+  config.interval = Math.max(0.1, parseFloat(document.getElementById("interval").value) || 1);
+  config.ending = (document.getElementById("ending").value || "").trim();
+
+  // quality from panel
+  const q = Math.max(1, Math.min(3, parseInt(document.getElementById("quality").value || "2", 10)));
+  setQuality(q); // WebGL侧
+  document.getElementById("quality").value = String(q);
+}
+function resetPlayback(){
+  playing = false;
+  playIndex = 0;
+  stopTimer();
+  setWord(""); // 清空字形（进入纯气场）
+}
+
+function startPlayback(){
+  if(playing) return;
+  if(config.texts.length === 0){
+    // 没内容就只保持气场
+    setWord(config.ending || "");
+    return;
+  }
+  playing = true;
+  playIndex = 0;
+  setWord(config.texts[0]);
+
+  stopTimer();
+  timer = setInterval(()=>{
+    playIndex++;
+    if(playIndex < config.texts.length){
+      setWord(config.texts[playIndex]);
+    }else{
+      stopTimer();
+      playing = false;
+      if(config.ending){
+        setWord(config.ending);
+      }else{
+        setWord("");
+      }
+    }
+  }, config.interval * 1000);
+}
+
+/* 设置面板 UI */
+const panel = document.getElementById("panel");
+document.getElementById("gear").onclick = ()=>{
+  panel.style.display = (panel.style.display === "none" || !panel.style.display) ? "block" : "none";
+};
+document.getElementById("apply").onclick = ()=>{
+  parseConfig();
+  resetPlayback();
+  // 不自动开始：按你要求“点击任意位置开始”
+  startedOnce = false;
+};
+
+/* 点击任意位置：首次启动播放；之后点击不打断（广告大屏逻辑） */
+window.addEventListener("pointerdown", ()=>{
+  if(panel.style.display === "block") return; // 点面板不触发播放
+  if(!startedOnce){
+    startedOnce = true;
+    parseConfig();
+    startPlayback();
+  }
+},{ passive:true });
+
+/* ============================================================
+   WebGL2 GPU 粒子核心
+   - 粒子状态存储在 RGBA32F 纹理：xy=pos, zw=vel
+   - ping-pong FBO 更新
+   - 目标字形存储在 targetsTex：RG=target pos (pixels)
+   - setWord(text) -> rebuildTargetsTextureFromText(text)
+   ============================================================ */
+
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl2', { antialias:false, alpha:false, depth:false, stencil:false, premultipliedAlpha:false });
+
+if(!gl){
+  document.body.innerHTML = '<div style="color:#fff;padding:18px;font:14px ui-monospace;">需要 WebGL2（Chrome/Edge）。</div>';
+  throw new Error("WebGL2 not available");
+}
+
+const extCBF = gl.getExtension('EXT_color_buffer_float');
+if(!extCBF){
+  document.body.innerHTML = '<div style="color:#fff;padding:18px;font:14px ui-monospace;">需要 EXT_color_buffer_float 才能写入浮点纹理（FBO）。</div>';
+  throw new Error("EXT_color_buffer_float missing");
+}
+
+const DPR_CAP = 1.8;
+function resizeGL(){
+  const dpr = Math.min(DPR_CAP, window.devicePixelRatio || 1);
+  const w = Math.floor(innerWidth * dpr);
+  const h = Math.floor(innerHeight * dpr);
+  if(canvas.width !== w || canvas.height !== h){
+    canvas.width = w; canvas.height = h;
+    gl.viewport(0,0,w,h);
+  }
+  return { dpr, w, h };
+}
+window.addEventListener("resize", ()=>{
+  resizeGL();
+  // 画布尺寸变了：目标字形与仿真坐标都要重建更合理
+  rebuildTargetsTextureFromText(currentWord, true);
+});
+
+/* ---------- Shaders ---------- */
+const quadVS = `#version 300 es
+precision highp float;
+const vec2 P[6]=vec2[6](
+  vec2(-1.,-1.), vec2( 1.,-1.), vec2(-1., 1.),
+  vec2(-1., 1.), vec2( 1.,-1.), vec2( 1., 1.)
+);
+out vec2 vUv;
+void main(){
+  vec2 p=P[gl_VertexID];
+  vUv=p*0.5+0.5;
+  gl_Position=vec4(p,0,1);
+}`;
+
+const updateFS = `#version 300 es
+precision highp float;
+in vec2 vUv;
+layout(location=0) out vec4 outPosVel;
+
+uniform sampler2D uPosVel;
+uniform sampler2D uTargets;      // RG=target px
+uniform ivec2 uSimSize;
+uniform ivec2 uTargetsSize;
+uniform int uTargetCount;
+
+uniform vec2 uRes;               // px
+uniform vec2 uMouse;             // y-up px
+uniform float uTime;
+uniform float uDt;
+
+uniform float uBreath;
+uniform float uFlowAngle;
+uniform float uIsBow;            // 0/1
+uniform float uBlank;            // 0/1  (blank word)
+
+float hash(vec2 p){
+  return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453123);
+}
+float noise(vec2 p){
+  vec2 i=floor(p), f=fract(p);
+  vec2 u=f*f*(3.0-2.0*f);
+  float a=hash(i);
+  float b=hash(i+vec2(1,0));
+  float c=hash(i+vec2(0,1));
+  float d=hash(i+vec2(1,1));
+  return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
+}
+float fbm(vec2 p){
+  float v=0.0, a=0.5;
+  for(int i=0;i<4;i++){ v+=a*noise(p); p*=2.02; a*=0.5; }
+  return v;
+}
+vec2 curl(vec2 p){
+  float s=0.0022;
+  float t=uTime*0.08;
+  vec2 n=p*s+vec2(9.7,3.1);
+  float e=0.6;
+  float n1=fbm(n+vec2(e*0.001,0.0)+vec2(0.0,t));
+  float n2=fbm(n-vec2(e*0.001,0.0)+vec2(0.0,t));
+  float n3=fbm(n+vec2(0.0,e*0.001)+vec2(0.0,t));
+  float n4=fbm(n-vec2(0.0,e*0.001)+vec2(0.0,t));
+  float dndx=(n1-n2);
+  float dndy=(n3-n4);
+  return vec2(dndy, -dndx);
+}
+
+vec2 fetchTarget(int id){
+  int tid = id % max(uTargetCount, 1);
+  int x = tid % uTargetsSize.x;
+  int y = tid / uTargetsSize.x;
+  vec2 uv = (vec2(float(x)+0.5, float(y)+0.5) / vec2(uTargetsSize));
+  return texture(uTargets, uv).xy;
+}
+
+// =======================
+// Idle Mode: Particle Ring Flow
+// =======================
+vec2 idleRingTarget(int id, vec2 res, float time){
+  // 分三层环（不显杂乱）
+  float ringCount = 3.0;
+  float ringId = mod(float(id), ringCount);
+
+  // 环半径（随时间轻微呼吸）
+  float baseR = min(res.x, res.y) * (0.22 + 0.07 * ringId);
+  float breathe = 1.0 + 0.08 * sin(time * 0.8 + ringId * 1.9);
+  float R = baseR * breathe;
+
+  // 角度：由 id 决定分布，整体缓慢旋转
+  float angle =
+    float(id) * 0.0009 +
+    time * (0.12 + ringId * 0.06);
+
+  // 环心轻微漂移（避免死板）
+  vec2 center = res * 0.5 +
+    vec2(
+      sin(time * 0.13 + ringId) * res.x * 0.05,
+      cos(time * 0.11 + ringId) * res.y * 0.05
+    );
+
+  return center + vec2(cos(angle), sin(angle)) * R;
+}
+
+
+void main(){
+  ivec2 ij = ivec2(floor(vUv * vec2(uSimSize)));
+  ij = clamp(ij, ivec2(0), uSimSize-1);
+  int id = ij.y * uSimSize.x + ij.x;
+
+  vec4 pv = texelFetch(uPosVel, ij, 0);
+  vec2 pos = pv.xy;
+  vec2 vel = pv.zw;
+
+  // roles by deterministic hash
+  float r = fract(sin(float(id)*12.9898)*43758.5453);
+  float roleCore  = step(r, 0.30);
+  float roleFlesh = step(r, 0.85) - roleCore;
+  float roleDust  = 1.0 - roleCore - roleFlesh;
+
+  float k = roleCore*0.085 + roleFlesh*0.045 + roleDust*0.012;
+  k *= uBreath;
+
+  // if blank: almost no attraction (keep only flow + swirl, like "气场")
+  float attractMul = (uBlank > 0.5) ? 0.22 : 1.0;
+
+
+  vec2 tgt;
+  if(uBlank > 0.5){
+    // 空文字：进入待机环流模式
+    tgt = idleRingTarget(id, uRes, uTime);
+  }else{
+    // 正常文字：吸附字形
+    tgt = fetchTarget(id);
+  }
+  vec2 d = (tgt - pos);
+
+
+  d.y += 140.0 * uIsBow; // ceremony "bow"
+  vel += d * (k * attractMul);
+
+  // curl swirl
+  vec2 c = curl(pos);
+  float swirl = 0.55 + 0.35*roleDust + 0.15*roleFlesh;
+  vel += c * (2.4 * swirl);
+
+  // global flow ("dragon vein")
+  vec2 flow = vec2(cos(uFlowAngle), sin(uFlowAngle)) * 0.14;
+  vel += flow;
+
+  // mouse perturbation (optional, still subtle)
+  vec2 md = pos - uMouse;
+  float mr = min(uRes.x, uRes.y) * 0.18;
+  float d2 = dot(md,md);
+  if(d2 < mr*mr){
+    float dist = sqrt(d2)+0.001;
+    float q = 1.0 - dist/mr;
+    float rep = q*q * 1.6;
+    vec2 nrm = md / dist;
+    vel += nrm * rep;
+    vel += vec2(-nrm.y, nrm.x) * rep * 0.6;
+  }
+
+  vel *= 0.84;
+  pos += vel;
+
+  // wrap
+  if(pos.x < -20.0) pos.x = uRes.x + 20.0;
+  if(pos.x > uRes.x + 20.0) pos.x = -20.0;
+  if(pos.y < -20.0) pos.y = uRes.y + 20.0;
+  if(pos.y > uRes.y + 20.0) pos.y = -20.0;
+
+  outPosVel = vec4(pos, vel);
+}
+`;
+
+const renderVS = `#version 300 es
+precision highp float;
+uniform sampler2D uPosVel;
+uniform ivec2 uSimSize;
+uniform vec2 uRes;
+uniform float uTime;
+out float vRole;
+out float vSpeed;
+
+vec4 fetchPV(int id){
+  int x = id % uSimSize.x;
+  int y = id / uSimSize.x;
+  return texelFetch(uPosVel, ivec2(x,y), 0);
+}
+
+void main(){
+  int id = gl_VertexID;
+  vec4 pv = fetchPV(id);
+  vec2 pos = pv.xy;
+  vec2 vel = pv.zw;
+
+  float r = fract(sin(float(id)*12.9898)*43758.5453);
+  float roleCore  = step(r, 0.30);
+  float roleFlesh = step(r, 0.85) - roleCore;
+  float roleDust  = 1.0 - roleCore - roleFlesh;
+  vRole = roleCore*0.0 + roleFlesh*1.0 + roleDust*2.0;
+
+  vSpeed = clamp(length(vel) * 0.08, 0.0, 1.0);
+
+  vec2 ndc = (pos / uRes) * 2.0 - 1.0;
+  ndc.y = -ndc.y;
+  gl_Position = vec4(ndc, 0.0, 1.0);
+
+  float base = (vRole < 0.5) ? 2.25 : (vRole < 1.5 ? 1.65 : 1.15);
+  gl_PointSize = base + vSpeed*1.85;
+}
+`;
+
+const renderFS = `#version 300 es
+precision highp float;
+out vec4 outColor;
+
+uniform float uTime;
+uniform float uIsBow;
+
+in float vRole;
+in float vSpeed;
+
+float softCircle(vec2 uv){
+  float d = length(uv - 0.5);
+  return smoothstep(0.5, 0.0, d);
+}
+
+void main(){
+  float s = softCircle(gl_PointCoord);
+
+  // minimal cold glow palette
+  float mixv = 0.5 + 0.5*sin(uTime*0.18);
+  vec3 c1 = vec3(0.55, 0.86, 1.00);
+  vec3 c2 = vec3(0.72, 0.55, 1.00);
+  vec3 base = mix(c1, c2, mixv);
+
+  float a = (vRole < 0.5) ? 0.35 : (vRole < 1.5 ? 0.18 : 0.06);
+  a += uIsBow * ((vRole < 0.5) ? 0.18 : 0.06);
+
+  float sharp = 0.65 + 0.6*vSpeed;
+  vec3 col = base * (0.7 + 0.55*sharp);
+
+  outColor = vec4(col, a * s);
+}
+`;
+
+const bgFS = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 outColor;
+uniform vec2 uRes;
+uniform float uTime;
+
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453123); }
+float noise(vec2 p){
+  vec2 i=floor(p), f=fract(p);
+  vec2 u=f*f*(3.0-2.0*f);
+  float a=hash(i);
+  float b=hash(i+vec2(1,0));
+  float c=hash(i+vec2(0,1));
+  float d=hash(i+vec2(1,1));
+  return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
+}
+float fbm(vec2 p){
+  float v=0.0, a=0.5;
+  for(int i=0;i<4;i++){ v+=a*noise(p); p*=2.02; a*=0.5; }
+  return v;
+}
+
+void main(){
+  vec2 p = vUv * uRes;
+  float t = uTime;
+
+  float n = fbm(p*0.0012 + vec2(t*0.03, t*0.02));
+  float r = length(vUv - vec2(0.5,0.55));
+  float v = smoothstep(0.98, 0.12, r);
+
+  vec3 base = vec3(0.02,0.02,0.03);
+  vec3 glow = vec3(0.06,0.10,0.13) * (0.22 + 0.55*n) * v;
+  outColor = vec4(base + glow, 1.0);
+}
+`;
+
+/* ---------- Compile helpers ---------- */
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+    const info = gl.getShaderInfoLog(s);
+    console.error(info);
+    throw new Error(info);
+  }
+  return s;
+}
+function link(vs, fs){
+  const p = gl.createProgram();
+  gl.attachShader(p, vs);
+  gl.attachShader(p, fs);
+  gl.linkProgram(p);
+  if(!gl.getProgramParameter(p, gl.LINK_STATUS)){
+    const info = gl.getProgramInfoLog(p);
+    console.error(info);
+    throw new Error(info);
+  }
+  return p;
+}
+
+const progUpdate = link(compile(gl.VERTEX_SHADER, quadVS), compile(gl.FRAGMENT_SHADER, updateFS));
+const progRender = link(compile(gl.VERTEX_SHADER, renderVS), compile(gl.FRAGMENT_SHADER, renderFS));
+const progBG     = link(compile(gl.VERTEX_SHADER, quadVS), compile(gl.FRAGMENT_SHADER, bgFS));
+
+// dummy VAO for gl_VertexID
+const vao = gl.createVertexArray();
+gl.bindVertexArray(vao);
+
+/* ---------- Float textures & FBO ---------- */
+let simN = 0;
+let simSize = { w:0, h:0 };
+let posVelTex = [null,null];
+let fbo = [null,null];
+let ping = 0;
+
+function createFloatTex(w,h,data=null){
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, w, h, 0, gl.RGBA, gl.FLOAT, data);
+  return tex;
+}
+function createFBO(tex){
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  if(status !== gl.FRAMEBUFFER_COMPLETE){
+    throw new Error('FBO incomplete: ' + status.toString(16));
+  }
+  return fb;
+}
+
+/* ---------- Quality levels ---------- */
+const QUALITY = [
+  { name:'LOW',  side:256 }, // 65k
+  { name:'MID',  side:384 }, // 147k
+  { name:'HIGH', side:512 }  // 262k
+];
+let qIndex = 1;
+
+function setQuality(q){ // q:1..3
+  qIndex = Math.max(0, Math.min(2, (q|0)-1));
+  initSimTextures();
+}
+
+/* init sim textures */
+function initSimTextures(){
+  const { w, h } = resizeGL();
+  const side = QUALITY[qIndex].side;
+  simSize = { w:side, h:side };
+  simN = side*side;
+
+  const data = new Float32Array(simN * 4);
+  for(let i=0;i<simN;i++){
+    data[i*4+0] = Math.random()*w;
+    data[i*4+1] = Math.random()*h;
+    data[i*4+2] = (Math.random()-0.5)*0.2;
+    data[i*4+3] = (Math.random()-0.5)*0.2;
+  }
+
+  for(let i=0;i<2;i++){
+    if(posVelTex[i]) gl.deleteTexture(posVelTex[i]);
+    if(fbo[i]) gl.deleteFramebuffer(fbo[i]);
+  }
+
+  posVelTex[0] = createFloatTex(side, side, data);
+  posVelTex[1] = createFloatTex(side, side, data);
+  fbo[0] = createFBO(posVelTex[0]);
+  fbo[1] = createFBO(posVelTex[1]);
+  ping = 0;
+}
+
+/* ---------- Targets texture (RG=target pos px) ---------- */
+let currentWord = "";
+let targetsTex = null;
+let targetsSize = { w:1, h:1 };
+let targetCount = 1;
+let isBlank = 1; // 1 if empty word
+
+function buildTargetsPoints(text){
+  const { w, h } = resizeGL();
+  const off = document.createElement('canvas');
+  off.width = Math.floor(w);
+  off.height = Math.floor(h);
+  const c = off.getContext('2d');
+
+  c.clearRect(0,0,off.width,off.height);
+  const size = Math.floor(Math.min(w,h)*0.32);
+
+  c.font = `700 ${size}px "PingFang SC","Microsoft YaHei","Heiti SC",sans-serif`;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+
+  // multi-stroke skeleton keeps readability
+  for(let i=0;i<3;i++){
+    c.lineWidth = 6 + i*6;
+    c.strokeStyle = 'white';
+    c.strokeText(text, off.width/2, off.height/2);
+  }
+
+  const img = c.getImageData(0,0,off.width,off.height).data;
+  const pts = [];
+  const step = 6;
+
+  for(let y=0;y<off.height;y+=step){
+    for(let x=0;x<off.width;x+=step){
+      const a = img[(y*off.width + x)*4 + 3];
+      if(a > 40){
+        if(Math.random() < 0.82) pts.push([x, y]);
+      }
+    }
+  }
+
+  if(pts.length < 1200){
+    for(let i=0;i<2000;i++){
+      pts.push([off.width/2 + (Math.random()-0.5)*120, off.height/2 + (Math.random()-0.5)*120]);
+    }
+  }
+  return pts;
+}
+
+function rebuildTargetsTextureFromText(text, forceResizeReinit=false){
+  const { w, h } = resizeGL();
+  const trimmed = (text || "").trim();
+  currentWord = text || "";
+  isBlank = trimmed ? 0 : 1;
+
+  // if blank: keep 1 target at center
+  let pts;
+  if(isBlank){
+    pts = [[w/2, h/2]];
+  }else{
+    pts = buildTargetsPoints(trimmed);
+  }
+
+  targetCount = pts.length;
+
+  const tw = Math.ceil(Math.sqrt(targetCount));
+  const th = Math.ceil(targetCount / tw);
+  targetsSize = { w:tw, h:th };
+
+  const data = new Float32Array(tw*th*4);
+  for(let i=0;i<targetCount;i++){
+    data[i*4+0] = pts[i][0];
+    data[i*4+1] = pts[i][1];
+    data[i*4+2] = 0;
+    data[i*4+3] = 1;
+  }
+
+  if(targetsTex) gl.deleteTexture(targetsTex);
+  targetsTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, targetsTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, tw, th, 0, gl.RGBA, gl.FLOAT, data);
+
+  if(forceResizeReinit){
+    initSimTextures();
+  }
+}
+
+/* 对外暴露：设置当前显示文字（由广告播放层调用） */
+function setWord(w){
+  rebuildTargetsTextureFromText(w, false);
+}
+
+/* ---------- Mouse (y-up pixels for shader) ---------- */
+let mouse = { x: 0, y: 0 };
+window.addEventListener('pointermove', (e)=>{
+  const { dpr, w, h } = resizeGL();
+  mouse.x = e.clientX * dpr;
+  mouse.y = (innerHeight - e.clientY) * dpr;
+}, { passive:true });
+
+/* ---------- Uniform locations ---------- */
+const U = {
+  // update
+  up_posVel: gl.getUniformLocation(progUpdate, 'uPosVel'),
+  up_targets: gl.getUniformLocation(progUpdate, 'uTargets'),
+  up_simSize: gl.getUniformLocation(progUpdate, 'uSimSize'),
+  up_targetsSize: gl.getUniformLocation(progUpdate, 'uTargetsSize'),
+  up_targetCount: gl.getUniformLocation(progUpdate, 'uTargetCount'),
+  up_res: gl.getUniformLocation(progUpdate, 'uRes'),
+  up_mouse: gl.getUniformLocation(progUpdate, 'uMouse'),
+  up_time: gl.getUniformLocation(progUpdate, 'uTime'),
+  up_dt: gl.getUniformLocation(progUpdate, 'uDt'),
+  up_breath: gl.getUniformLocation(progUpdate, 'uBreath'),
+  up_flowAngle: gl.getUniformLocation(progUpdate, 'uFlowAngle'),
+  up_isBow: gl.getUniformLocation(progUpdate, 'uIsBow'),
+  up_blank: gl.getUniformLocation(progUpdate, 'uBlank'),
+
+  // render
+  rd_posVel: gl.getUniformLocation(progRender, 'uPosVel'),
+  rd_simSize: gl.getUniformLocation(progRender, 'uSimSize'),
+  rd_res: gl.getUniformLocation(progRender, 'uRes'),
+  rd_time: gl.getUniformLocation(progRender, 'uTime'),
+  rd_isBow: gl.getUniformLocation(progRender, 'uIsBow'),
+
+  // bg
+  bg_res: gl.getUniformLocation(progBG, 'uRes'),
+  bg_time: gl.getUniformLocation(progBG, 'uTime'),
+};
+
+/* ---------- Start ---------- */
+resizeGL();
+initSimTextures();
+setWord(""); // 初始空：纯气场
+
+/* 键盘切档（同步面板） */
+window.addEventListener('keydown', (e)=>{
+  if(e.key === '1'){ setQuality(1); document.getElementById("quality").value="1"; }
+  if(e.key === '2'){ setQuality(2); document.getElementById("quality").value="2"; }
+  if(e.key === '3'){ setQuality(3); document.getElementById("quality").value="3"; }
+});
+
+/* ---------- Render loop ---------- */
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(0.033, (now - last)/1000);
+  last = now;
+
+  const { w, h } = resizeGL();
+  const time = now/1000;
+
+  const breath = 0.85 + 0.25*Math.sin(time*0.6);
+  const flowAngle = Math.sin(time*0.25) * 0.6;
+
+  // “拜”仪式仅当单字等于 拜 时触发（结束语不会误触）
+  const isBow = (String(currentWord).trim() === "拜") ? 1.0 : 0.0;
+
+  /* ---- BG pass (opaque) ---- */
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.disable(gl.BLEND);
+  gl.useProgram(progBG);
+  gl.uniform2f(U.bg_res, w, h);
+  gl.uniform1f(U.bg_time, time);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  /* ---- UPDATE pass (ping-pong) ---- */
+  const src = ping;
+  const dst = 1 - ping;
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo[dst]);
+  gl.viewport(0,0,simSize.w, simSize.h);
+  gl.disable(gl.BLEND);
+
+  gl.useProgram(progUpdate);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, posVelTex[src]);
+  gl.uniform1i(U.up_posVel, 0);
+
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, targetsTex);
+  gl.uniform1i(U.up_targets, 1);
+
+  gl.uniform2i(U.up_simSize, simSize.w, simSize.h);
+  gl.uniform2i(U.up_targetsSize, targetsSize.w, targetsSize.h);
+  gl.uniform1i(U.up_targetCount, targetCount);
+
+  gl.uniform2f(U.up_res, w, h);
+  gl.uniform2f(U.up_mouse, mouse.x, mouse.y);
+  gl.uniform1f(U.up_time, time);
+  gl.uniform1f(U.up_dt, dt);
+
+  gl.uniform1f(U.up_breath, breath);
+  gl.uniform1f(U.up_flowAngle, flowAngle);
+  gl.uniform1f(U.up_isBow, isBow);
+  gl.uniform1f(U.up_blank, isBlank);
+
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  ping = dst;
+
+  /* ---- RENDER particles ---- */
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0,0,w,h);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // additive
+
+  gl.useProgram(progRender);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, posVelTex[ping]);
+  gl.uniform1i(U.rd_posVel, 0);
+
+  gl.uniform2i(U.rd_simSize, simSize.w, simSize.h);
+  gl.uniform2f(U.rd_res, w, h);
+  gl.uniform1f(U.rd_time, time);
+  gl.uniform1f(U.rd_isBow, isBow);
+
+  gl.drawArrays(gl.POINTS, 0, simN);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* 初始面板值同步（让“档位”生效） */
+parseConfig();
+resetPlayback();
+</script>
+</body>
+</html>
