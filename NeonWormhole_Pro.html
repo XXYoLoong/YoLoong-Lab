@@ -1,0 +1,1204 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Neon Wormhole · PRO (GPU + Bloom + HUD)</title>
+  <style>
+    html,body{height:100%;margin:0;background:#03050c;overflow:hidden;}
+    canvas{display:block;width:100%;height:100%;}
+
+    .hud{
+      position:fixed;left:16px;top:14px;z-index:10;
+      padding:10px 12px;border-radius:16px;
+      background:rgba(0,0,0,.28);
+      border:1px solid rgba(255,255,255,.14);
+      color:rgba(255,255,255,.78);
+      font: 12.5px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      user-select:none;
+      max-width:min(520px, calc(100vw - 32px));
+    }
+    .hud b{color:rgba(255,255,255,.92);font-weight:650}
+    .hud kbd{
+      padding:2px 6px;border-radius:8px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.06);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 11px;
+    }
+
+    .hint{
+      position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
+      z-index:10;padding:10px 12px;border-radius:16px;
+      background:rgba(0,0,0,.24);
+      border:1px solid rgba(255,255,255,.14);
+      color:rgba(255,255,255,.70);
+      font: 12.5px/1.35 ui-sans-serif,system-ui;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      letter-spacing:.04em;
+      user-select:none;
+      max-width:min(720px, calc(100vw - 32px));
+      text-align:center;
+    }
+
+    /* 控制面板 */
+    .panelBtn{
+      position:fixed;right:16px;top:14px;z-index:12;
+      width:40px;height:40px;border-radius:14px;
+      background:rgba(0,0,0,.28);
+      border:1px solid rgba(255,255,255,.14);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display:flex;align-items:center;justify-content:center;
+      cursor:pointer;
+      color:rgba(255,255,255,.78);
+      user-select:none;
+    }
+    .panel{
+      position:fixed;right:16px;top:62px;z-index:12;
+      width:min(360px, calc(100vw - 32px));
+      padding:12px 12px 14px;border-radius:16px;
+      background:rgba(0,0,0,.34);
+      border:1px solid rgba(255,255,255,.14);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color:rgba(255,255,255,.80);
+      font: 12.5px/1.35 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial;
+      display:none;
+    }
+    .panel h3{margin:0 0 10px;font-size:13px;font-weight:700;color:rgba(255,255,255,.92)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .row{display:flex;gap:10px;}
+    .field{display:flex;flex-direction:column;gap:6px}
+    .label{opacity:.8;font-size:12px}
+    input[type="range"]{width:100%}
+    select, button{
+      width:100%;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      color:rgba(255,255,255,.86);
+      padding:8px 10px;
+      outline:none;
+    }
+    button{cursor:pointer;font-weight:650}
+    button:hover{background:rgba(255,255,255,.10)}
+    .small{opacity:.7;font-size:11px;line-height:1.35;margin-top:8px}
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:4px 10px;border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      font-size:11px;opacity:.85;
+    }
+  </style>
+</head>
+<body>
+  <!-- 返回首页 · 隐式热区触发（可配置位置） -->
+<div id="home-hotzone"></div>
+<div id="home-btn" onclick="goHome()">← 首页</div>
+
+<style>
+/* ===== 配置区域 ===== */
+/* 可选值：top-left / bottom-left */
+:root{
+  --home-pos: bottom-left;
+}
+
+/* ===== 热区 ===== */
+#home-hotzone{
+  position:fixed;
+  z-index:9998;
+  width:90px;
+  height:90px;
+}
+
+/* ===== 按钮 ===== */
+#home-btn{
+  position:fixed;
+  z-index:9999;
+
+  padding:8px 16px;
+  font-size:13px;
+  font-weight:500;
+  border-radius:999px;
+  cursor:pointer;
+  user-select:none;
+
+  background:linear-gradient(135deg,#7bb8ff,#b79cff);
+  color:#ffffff;
+  box-shadow:0 10px 30px rgba(120,140,255,.35);
+
+  opacity:0;
+  pointer-events:none;
+  transform:scale(.96);
+
+  transition:
+    opacity .35s ease,
+    transform .35s ease,
+    box-shadow .35s ease;
+}
+
+#home-btn.show{
+  opacity:1;
+  pointer-events:auto;
+  transform:scale(1);
+}
+
+#home-btn:hover{
+  box-shadow:0 16px 46px rgba(120,140,255,.45);
+}
+
+/* ===== 左上角模式 ===== */
+:root[style*="top-left"] #home-hotzone{
+  top:0; left:0;
+}
+:root[style*="top-left"] #home-btn{
+  top:20px; left:20px;
+  transform:translateY(-6px) scale(.96);
+}
+:root[style*="top-left"] #home-btn.show{
+  transform:translateY(0) scale(1);
+}
+
+/* ===== 左下角模式 ===== */
+:root[style*="bottom-left"] #home-hotzone{
+  bottom:0; left:0;
+}
+:root[style*="bottom-left"] #home-btn{
+  bottom:20px; left:20px;
+  transform:translateY(6px) scale(.96);
+}
+:root[style*="bottom-left"] #home-btn.show{
+  transform:translateY(0) scale(1);
+}
+</style>
+
+<script>
+const hotzone = document.getElementById("home-hotzone");
+const homeBtn = document.getElementById("home-btn");
+let hideTimer = null;
+
+// 显示
+hotzone.addEventListener("mouseenter", ()=>{
+  clearTimeout(hideTimer);
+  homeBtn.classList.add("show");
+});
+
+// 延迟隐藏
+function scheduleHide(){
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(()=>{
+    homeBtn.classList.remove("show");
+  }, 800);
+}
+
+hotzone.addEventListener("mouseleave", scheduleHide);
+homeBtn.addEventListener("mouseleave", scheduleHide);
+homeBtn.addEventListener("mouseenter", ()=>clearTimeout(hideTimer));
+
+// 跳转
+function goHome(){
+  window.location.href = "index.html";
+}
+
+// ESC 快捷返回（推荐）
+addEventListener("keydown", e=>{
+  if(e.key === "Escape") goHome();
+});
+</script>
+
+  <div class="hud">
+    <b>Neon Wormhole · PRO</b> <span class="pill" id="fpsPill">FPS: --</span><br/>
+    鼠标移动：转向　|　滚轮：速度　|　<kbd>空格</kbd>：脉冲爆发　|　<kbd>R</kbd>：重置　|　<kbd>P</kbd>：截图　|　<kbd>H</kbd>：隐藏HUD　|　<kbd>Esc</kbd>：暂停
+  </div>
+  <div class="hint">现在是：统一同向的多层螺旋虫洞 + Bloom/色差/扫描线/暗角/轻微Glitch。右上角可打开调参面板。</div>
+  <div class="panelBtn" id="panelBtn" title="设置">⚙</div>
+
+  <div class="panel" id="panel">
+    <h3>实时调参（不会出现反向运动）</h3>
+
+    <div class="grid">
+      <div class="field">
+        <div class="label">速度 Speed</div>
+        <input id="uiSpeed" type="range" min="0.2" max="3.0" step="0.01" value="1.15">
+      </div>
+      <div class="field">
+        <div class="label">爆发强度 Burst</div>
+        <input id="uiBurstPower" type="range" min="0.2" max="2.0" step="0.01" value="1.0">
+      </div>
+
+      <div class="field">
+        <div class="label">粒子密度 Density</div>
+        <input id="uiDensity" type="range" min="0.5" max="2.0" step="0.01" value="1.0">
+      </div>
+      <div class="field">
+        <div class="label">点大小 Point</div>
+        <input id="uiPoint" type="range" min="4.0" max="18.0" step="0.1" value="10.0">
+      </div>
+
+      <div class="field">
+        <div class="label">Bloom 强度</div>
+        <input id="uiBloom" type="range" min="0.0" max="1.6" step="0.01" value="0.85">
+      </div>
+      <div class="field">
+        <div class="label">Bloom 半径</div>
+        <input id="uiBloomRadius" type="range" min="0.8" max="3.5" step="0.01" value="2.1">
+      </div>
+
+      <div class="field">
+        <div class="label">色差 Chromatic</div>
+        <input id="uiChroma" type="range" min="0.0" max="1.0" step="0.01" value="0.25">
+      </div>
+      <div class="field">
+        <div class="label">Glitch</div>
+        <input id="uiGlitch" type="range" min="0.0" max="1.0" step="0.01" value="0.18">
+      </div>
+
+      <div class="field">
+        <div class="label">扫描线 Scanline</div>
+        <input id="uiScan" type="range" min="0.0" max="1.0" step="0.01" value="0.22">
+      </div>
+      <div class="field">
+        <div class="label">暗角 Vignette</div>
+        <input id="uiVig" type="range" min="0.0" max="1.2" step="0.01" value="0.60">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div class="field" style="flex:1">
+        <div class="label">主题色 Palette</div>
+        <select id="uiPalette">
+          <option value="0">Neon Cyan / Purple</option>
+          <option value="1">Neon Green / Blue</option>
+          <option value="2">Hot Pink / Orange</option>
+          <option value="3">Ice White / Blue</option>
+        </select>
+      </div>
+      <div class="field" style="flex:1">
+        <div class="label">性能自适应 Auto Quality</div>
+        <select id="uiAutoQ">
+          <option value="1" selected>ON</option>
+          <option value="0">OFF</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <button id="btnRegen">重建粒子（换构图）</button>
+      <button id="btnReset">重置默认</button>
+    </div>
+
+    <div class="small">
+      说明：Bloom/色差/扫描线/暗角/Glitch 是后处理（两次模糊 + 合成）。<br/>
+      你可以：全屏(F11) + 提高 Density + BloomRadius来提升性能。
+    </div>
+  </div>
+
+  <canvas id="gl"></canvas>
+
+<script>
+/* ============================================================
+   Neon Wormhole · PRO
+   - WebGL1 但做了离屏 + Bloom 后处理（RGBA8）
+   - 运动统一同向（无反向运动）
+   - 多层螺旋（同向不同相位/速度/半径呼吸）
+   - 后处理：Bloom + 色差 + 扫描线 + 暗角 + 轻微Glitch
+   - 控制面板：实时调参 + 性能自适应
+   ============================================================ */
+
+const canvas = document.getElementById("gl");
+const gl = canvas.getContext("webgl", { antialias:false, alpha:false, premultipliedAlpha:false });
+if(!gl){
+  alert("你的浏览器不支持 WebGL。");
+  throw new Error("WebGL not supported");
+}
+
+/* ---------- DPR / 分辨率策略（性能关键） ---------- */
+let DPR_CAP = 1.75;
+let dpr = 1;
+
+function resize(){
+  dpr = Math.min(DPR_CAP, window.devicePixelRatio || 1);
+  canvas.width = Math.floor(innerWidth * dpr);
+  canvas.height = Math.floor(innerHeight * dpr);
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  gl.viewport(0,0,canvas.width, canvas.height);
+}
+resize();
+addEventListener("resize", ()=>{ resize(); scheduleRebuild(true); });
+
+/* ---------- UI 状态 ---------- */
+const state = {
+  speed: 1.15,
+  density: 1.0,
+  pointBase: 10.0,
+  burstPower: 1.0,
+
+  bloom: 0.85,
+  bloomRadius: 2.1,
+  chroma: 0.25,
+  glitch: 0.18,
+  scan: 0.22,
+  vignette: 0.60,
+
+  palette: 0,
+  autoQ: 1,
+
+  paused: false,
+  hudVisible: true
+};
+
+const fpsPill = document.getElementById("fpsPill");
+const hud = document.querySelector(".hud");
+const panelBtn = document.getElementById("panelBtn");
+const panel = document.getElementById("panel");
+
+panelBtn.onclick = ()=>{
+  panel.style.display = (panel.style.display === "none" || !panel.style.display) ? "block" : "none";
+};
+
+function bindRange(id, key){
+  const el = document.getElementById(id);
+  el.value = String(state[key]);
+  el.addEventListener("input", ()=>{ state[key] = parseFloat(el.value); });
+}
+bindRange("uiSpeed","speed");
+bindRange("uiDensity","density");
+bindRange("uiPoint","pointBase");
+bindRange("uiBurstPower","burstPower");
+bindRange("uiBloom","bloom");
+bindRange("uiBloomRadius","bloomRadius");
+bindRange("uiChroma","chroma");
+bindRange("uiGlitch","glitch");
+bindRange("uiScan","scan");
+bindRange("uiVig","vignette");
+
+document.getElementById("uiPalette").addEventListener("change", (e)=>{ state.palette = parseInt(e.target.value,10); });
+document.getElementById("uiAutoQ").addEventListener("change", (e)=>{ state.autoQ = parseInt(e.target.value,10); });
+
+document.getElementById("btnRegen").onclick = ()=>{ scheduleRebuild(false); };
+document.getElementById("btnReset").onclick = ()=>{
+  Object.assign(state, {
+    speed: 1.15, density: 1.0, pointBase: 10.0, burstPower: 1.0,
+    bloom: 0.85, bloomRadius: 2.1, chroma: 0.25, glitch: 0.18, scan: 0.22, vignette: 0.60,
+    palette: 0, autoQ: 1
+  });
+  // sync UI
+  const sync = (id,val)=>document.getElementById(id).value=String(val);
+  sync("uiSpeed",state.speed); sync("uiDensity",state.density); sync("uiPoint",state.pointBase); sync("uiBurstPower",state.burstPower);
+  sync("uiBloom",state.bloom); sync("uiBloomRadius",state.bloomRadius); sync("uiChroma",state.chroma); sync("uiGlitch",state.glitch);
+  sync("uiScan",state.scan); sync("uiVig",state.vignette);
+  document.getElementById("uiPalette").value=String(state.palette);
+  document.getElementById("uiAutoQ").value=String(state.autoQ);
+  scheduleRebuild(true);
+};
+
+/* ---------- 输入控制 ---------- */
+let mx = innerWidth*0.5, my = innerHeight*0.5;
+let targetYaw = 0, targetPitch = 0;
+let yaw = 0, pitch = 0;
+
+addEventListener("mousemove", (e)=>{
+  mx = e.clientX; my = e.clientY;
+  const nx = (mx / innerWidth) * 2 - 1;
+  const ny = (my / innerHeight) * 2 - 1;
+  targetYaw = nx * 0.45;
+  targetPitch = -ny * 0.25;
+},{passive:true});
+
+addEventListener("wheel", (e)=>{
+  state.speed += (e.deltaY > 0 ? -0.08 : 0.08);
+  state.speed = Math.max(0.25, Math.min(3.0, state.speed));
+  document.getElementById("uiSpeed").value = String(state.speed);
+},{passive:true});
+
+let burst = 0.0;
+let pulse = 0.0; // 额外“脉冲波”效果
+addEventListener("keydown",(e)=>{
+  if(e.code === "Space"){
+    burst = Math.min(1.0, burst + 0.85 * state.burstPower);
+    pulse = Math.min(1.0, pulse + 0.9);
+  }
+  if(e.key === "r" || e.key === "R"){
+    burst = 0; pulse = 0;
+    scheduleRebuild(false);
+  }
+  if(e.key === "h" || e.key === "H"){
+    state.hudVisible = !state.hudVisible;
+    hud.style.display = state.hudVisible ? "block" : "none";
+  }
+  if(e.key === "Escape"){
+    state.paused = !state.paused;
+  }
+  if(e.key === "p" || e.key === "P"){
+    // 截图：导出 PNG
+    const a = document.createElement("a");
+    a.download = "neon_wormhole.png";
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+  }
+});
+
+/* ============================================================
+   WebGL 工具：Shader/Program
+   ============================================================ */
+function compile(type, src){
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if(!gl.getShaderParameter(sh, gl.COMPILE_STATUS)){
+    const info = gl.getShaderInfoLog(sh);
+    gl.deleteShader(sh);
+    throw new Error(info);
+  }
+  return sh;
+}
+function link(vsSrc, fsSrc){
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, vsSrc));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fsSrc));
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){
+    const info = gl.getProgramInfoLog(prog);
+    gl.deleteProgram(prog);
+    throw new Error(info);
+  }
+  return prog;
+}
+function createTex(w,h,filter){
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  return t;
+}
+function createFBO(tex){
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return fb;
+}
+
+/* ============================================================
+   1) 粒子渲染（点精灵）到 offscreen
+   ============================================================ */
+const particleVS = `
+precision highp float;
+attribute vec3 aPos;
+attribute float aSeed;
+attribute float aType; // 0 tunnel, 1 stars
+
+uniform mat4 uProj;
+uniform mat4 uView;
+uniform float uTime;
+uniform float uSpeed;
+uniform float uBurst;
+uniform float uPointBase;
+uniform int   uPalette;
+
+varying float vSeed;
+varying float vType;
+varying float vDepth;
+varying float vHue;
+
+float hash(float n){ return fract(sin(n)*43758.5453123); }
+
+void main(){
+  vSeed = aSeed;
+  vType = aType;
+
+  vec3 p = aPos;
+
+  // ========= 统一同向的多层螺旋虫洞（无反向运动） =========
+  if(aType < 0.5){
+    float T = uTime * uSpeed * (1.0 + uBurst*0.9);
+
+    float layer = mod(floor(fract(aSeed*0.00123)*3.0), 3.0); // 0/1/2
+
+    float z = p.z + T * (0.80 + layer*0.15);
+    float period = 140.0;
+    z = mod(z, period) - period;
+
+    float angBase  = T * (0.62 + layer*0.12);
+    float angTwist = z * 0.06;
+    float ang = angBase + angTwist + aSeed*0.0062831;
+
+    float ca = cos(ang), sa = sin(ang);
+
+    float r = length(p.xy);
+    float breathe = 1.0 + 0.12*sin(T*0.7 + layer*2.0 + aSeed*0.01);
+    r *= breathe;
+
+    float wob = 0.18*sin(T*0.9 + z*0.08 + layer + aSeed*0.02);
+    vec2 xy = vec2(ca, sa) * r;
+    xy += vec2(-sa, ca) * (wob * r);
+
+    p = vec3(xy, z);
+
+    // Hue：随 z 与 layer 漂移（主题色由 FS 控制）
+    vHue = fract(0.62 + z*0.012 + layer*0.08 + T*0.02);
+  }else{
+    // 星空：同向推进，更慢更远
+    float T = uTime * uSpeed * 0.35;
+    float z = p.z + T;
+    float period = 220.0;
+    z = mod(z, period) - period;
+    p.z = z;
+
+    float drift = 0.15;
+    float ang = uTime*0.12 + aSeed*0.01;
+    p.xy += vec2(cos(ang), sin(ang)) * drift;
+
+    vHue = fract(0.55 + hash(aSeed)*0.10 + uTime*0.02);
+  }
+
+  vec4 viewPos = uView * vec4(p, 1.0);
+  gl_Position = uProj * viewPos;
+
+  float depth = max(0.001, -viewPos.z);
+  vDepth = depth;
+
+  float base = uPointBase * (aType < 0.5 ? 1.0 : 0.70);
+  float size = base / (0.22 + depth*0.06);
+  size *= (1.0 + uBurst*0.35);
+
+  gl_PointSize = clamp(size, 1.0, 90.0);
+}
+`;
+
+const particleFS = `
+precision highp float;
+varying float vSeed;
+varying float vType;
+varying float vDepth;
+varying float vHue;
+
+uniform float uTime;
+uniform float uBurst;
+uniform int   uPalette;
+
+vec3 hsv2rgb(vec3 c){
+  vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 paletteColor(float hue, float sat, float val){
+  // 0: Cyan/Purple, 1: Green/Blue, 2: Pink/Orange, 3: IceWhite/Blue
+  if(uPalette == 0){
+    return hsv2rgb(vec3(hue, sat, val));
+  }
+  if(uPalette == 1){
+    float h = fract(0.36 + hue*0.35);
+    return hsv2rgb(vec3(h, sat, val));
+  }
+  if(uPalette == 2){
+    float h = fract(0.92 + hue*0.28);
+    return hsv2rgb(vec3(h, sat, val));
+  }
+  // Ice
+  vec3 cold = vec3(0.75, 0.90, 1.00);
+  vec3 blue = vec3(0.40, 0.70, 1.00);
+  float m = 0.5 + 0.5*sin(uTime*0.2 + hue*6.2831);
+  return mix(cold, blue, m) * val;
+}
+
+void main(){
+  vec2 uv = gl_PointCoord * 2.0 - 1.0;
+  float d = dot(uv,uv);
+
+  float core = exp(-d * 3.8);
+  float halo = exp(-d * 1.25) * 0.70;
+
+  float spark = 0.0;
+  if(vType < 0.5){
+    spark = 0.22 * sin(uTime*14.0 + vSeed*0.09 + d*18.0);
+    spark = max(0.0, spark);
+  }
+
+  float sat = (vType < 0.5) ? 0.95 : 0.35;
+  float val = (vType < 0.5) ? 1.12 : 0.85;
+
+  vec3 rgb = paletteColor(vHue, sat, val);
+
+  float fade = 1.0 / (1.0 + vDepth*0.03);
+  fade *= (1.0 + uBurst*0.85);
+
+  float a = (core + halo + spark) * fade;
+
+  if(vType > 0.5){
+    a *= 0.70;
+    rgb *= 0.8 + 0.2*core;
+  }else{
+    rgb *= 0.85 + 0.40*halo;
+  }
+
+  if(a < 0.01) discard;
+
+  // 输出到 offscreen：颜色已乘 alpha，便于 bloom
+  gl_FragColor = vec4(rgb * a, 1.0);
+}
+`;
+
+/* ============================================================
+   2) 后处理：两次模糊 + 合成（Bloom + 色差 + 扫描线 + 暗角 + Glitch）
+   ============================================================ */
+const quadVS = `
+precision highp float;
+attribute vec2 aPos;
+varying vec2 vUv;
+void main(){
+  vUv = aPos*0.5 + 0.5;
+  gl_Position = vec4(aPos,0.0,1.0);
+}
+`;
+
+const blurFS = `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uTex;
+uniform vec2 uDir;       // (1/w,0) or (0,1/h)
+uniform float uRadius;   // blur radius scalar
+
+void main(){
+  // 9-tap gaussian-ish
+  vec4 sum = vec4(0.0);
+  float w0 = 0.227027;
+  float w1 = 0.1945946;
+  float w2 = 0.1216216;
+  float w3 = 0.054054;
+  float w4 = 0.016216;
+
+  vec2 d = uDir * uRadius;
+  sum += texture2D(uTex, vUv) * w0;
+  sum += texture2D(uTex, vUv + d*1.0) * w1;
+  sum += texture2D(uTex, vUv - d*1.0) * w1;
+  sum += texture2D(uTex, vUv + d*2.0) * w2;
+  sum += texture2D(uTex, vUv - d*2.0) * w2;
+  sum += texture2D(uTex, vUv + d*3.0) * w3;
+  sum += texture2D(uTex, vUv - d*3.0) * w3;
+  sum += texture2D(uTex, vUv + d*4.0) * w4;
+  sum += texture2D(uTex, vUv - d*4.0) * w4;
+
+  gl_FragColor = sum;
+}
+`;
+
+const compositeFS = `
+precision highp float;
+varying vec2 vUv;
+
+uniform sampler2D uScene;
+uniform sampler2D uBloom;
+
+uniform float uTime;
+uniform float uBloomAmt;
+uniform float uChroma;
+uniform float uGlitch;
+uniform float uScan;
+uniform float uVig;
+
+float hash(vec2 p){
+  return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453123);
+}
+
+vec2 glitchUV(vec2 uv){
+  // 轻微的横向断层（不夸张，避免低级）
+  float g = uGlitch;
+  if(g <= 0.001) return uv;
+
+  float t = uTime * 0.5;
+  float band = floor(uv.y * 220.0);
+  float rnd = hash(vec2(band, floor(t*6.0)));
+  float shift = (rnd - 0.5) * 0.02 * g;
+
+  float gate = smoothstep(0.65, 1.0, rnd) * g;
+  uv.x += shift * gate;
+
+  // 小概率整屏微抖
+  float j = step(0.985, hash(vec2(floor(t*2.0), 9.3))) * g;
+  uv.x += (hash(vec2(t,1.7))-0.5) * 0.01 * j;
+  uv.y += (hash(vec2(t,4.1))-0.5) * 0.01 * j;
+
+  return uv;
+}
+
+void main(){
+  vec2 uv = glitchUV(vUv);
+
+  // 色差：rgb 采样偏移
+  float ca = uChroma * 0.0025;
+  vec2 dir = normalize(uv - 0.5);
+  vec2 off = dir * ca;
+
+  vec3 sceneR = texture2D(uScene, uv + off).rgb;
+  vec3 sceneG = texture2D(uScene, uv).rgb;
+  vec3 sceneB = texture2D(uScene, uv - off).rgb;
+  vec3 scene = vec3(sceneR.r, sceneG.g, sceneB.b);
+
+  vec3 bloom = texture2D(uBloom, uv).rgb;
+
+  // Bloom 合成（加法但可控）
+  vec3 col = scene + bloom * uBloomAmt;
+
+  // 扫描线：细且克制
+  float scan = sin((uv.y + uTime*0.02) * 1200.0) * 0.5 + 0.5;
+  float scanAmt = uScan * 0.18;
+  col *= (1.0 - scanAmt + scan * scanAmt);
+
+  // 暗角：更像“设备镜头”
+  float r = length(uv - 0.5);
+  float vig = smoothstep(0.80, 0.20, r);
+  col *= mix(1.0 - uVig*0.75, 1.0, vig);
+
+  // 轻微胶片噪声
+  float n = (hash(uv*uTime*60.0) - 0.5) * 0.035;
+  col += n;
+
+  // Gamma-ish
+  col = pow(max(col, 0.0), vec3(0.96));
+
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+/* ---------- Programs ---------- */
+const progParticles = link(particleVS, particleFS);
+const progBlur      = link(quadVS, blurFS);
+const progComp      = link(quadVS, compositeFS);
+
+/* ---------- Attrib/Uniform locations ---------- */
+// particles
+const pLoc = {
+  aPos: gl.getAttribLocation(progParticles, "aPos"),
+  aSeed: gl.getAttribLocation(progParticles, "aSeed"),
+  aType: gl.getAttribLocation(progParticles, "aType"),
+  uProj: gl.getUniformLocation(progParticles, "uProj"),
+  uView: gl.getUniformLocation(progParticles, "uView"),
+  uTime: gl.getUniformLocation(progParticles, "uTime"),
+  uSpeed: gl.getUniformLocation(progParticles, "uSpeed"),
+  uBurst: gl.getUniformLocation(progParticles, "uBurst"),
+  uPointBase: gl.getUniformLocation(progParticles, "uPointBase"),
+  uPalette: gl.getUniformLocation(progParticles, "uPalette"),
+};
+// blur
+const bLoc = {
+  aPos: gl.getAttribLocation(progBlur, "aPos"),
+  uTex: gl.getUniformLocation(progBlur, "uTex"),
+  uDir: gl.getUniformLocation(progBlur, "uDir"),
+  uRadius: gl.getUniformLocation(progBlur, "uRadius"),
+};
+// composite
+const cLoc = {
+  aPos: gl.getAttribLocation(progComp, "aPos"),
+  uScene: gl.getUniformLocation(progComp, "uScene"),
+  uBloom: gl.getUniformLocation(progComp, "uBloom"),
+  uTime: gl.getUniformLocation(progComp, "uTime"),
+  uBloomAmt: gl.getUniformLocation(progComp, "uBloomAmt"),
+  uChroma: gl.getUniformLocation(progComp, "uChroma"),
+  uGlitch: gl.getUniformLocation(progComp, "uGlitch"),
+  uScan: gl.getUniformLocation(progComp, "uScan"),
+  uVig: gl.getUniformLocation(progComp, "uVig"),
+};
+
+/* ============================================================
+   矩阵工具（沿用你原文件的实现风格）
+   ============================================================ */
+function mat4Identity(){
+  return new Float32Array([1,0,0,0,  0,1,0,0,  0,0,1,0,  0,0,0,1]);
+}
+function mat4Perspective(out, fovy, aspect, near, far){
+  const f = 1.0 / Math.tan(fovy/2);
+  out[0]=f/aspect; out[1]=0; out[2]=0; out[3]=0;
+  out[4]=0; out[5]=f; out[6]=0; out[7]=0;
+  out[8]=0; out[9]=0; out[10]=(far+near)/(near-far); out[11]=-1;
+  out[12]=0; out[13]=0; out[14]=(2*far*near)/(near-far); out[15]=0;
+  return out;
+}
+function mat4Mul(out, a, b){
+  const o = new Float32Array(16);
+  for(let r=0;r<4;r++){
+    for(let c=0;c<4;c++){
+      o[r*4+c]=a[r*4+0]*b[0*4+c]+a[r*4+1]*b[1*4+c]+a[r*4+2]*b[2*4+c]+a[r*4+3]*b[3*4+c];
+    }
+  }
+  out.set(o); return out;
+}
+function mat4RotateX(out, rad){
+  const c=Math.cos(rad), s=Math.sin(rad);
+  out.set([1,0,0,0,  0,c,s,0,  0,-s,c,0,  0,0,0,1]);
+  return out;
+}
+function mat4RotateY(out, rad){
+  const c=Math.cos(rad), s=Math.sin(rad);
+  out.set([c,0,-s,0,  0,1,0,0,  s,0,c,0,  0,0,0,1]);
+  return out;
+}
+function mat4Translate(out, x,y,z){
+  out.set([1,0,0,0,  0,1,0,0,  0,0,1,0,  x,y,z,1]);
+  return out;
+}
+
+/* ============================================================
+   粒子数据生成（支持 density + 自动质量）
+   ============================================================ */
+let counts = { tunnel: 52000, stars: 12000, total: 64000 };
+function decideCounts(){
+  const px = innerWidth * innerHeight;
+  const scale = Math.max(0.7, Math.min(1.25, px / (1280*720)));
+
+  // density 加权
+  const den = state.density;
+
+  let tunnel = Math.floor(52000 * scale * den / (dpr*dpr));
+  let stars  = Math.floor(12000 * scale * den / (dpr*dpr));
+
+  tunnel = Math.max(18000, Math.min(95000, tunnel));
+  stars  = Math.max(5000,  Math.min(24000, stars));
+
+  return { tunnel, stars, total: tunnel + stars };
+}
+
+function buildCloud(){
+  counts = decideCounts();
+  const total = counts.total;
+  const data = new Float32Array(total * 5);
+
+  let idx = 0;
+
+  // A) tunnel
+  const ringCount = 340;
+  const zSpan = 140;
+  const baseR = 10.8;
+  const thickness = 2.6;
+
+  for(let i=0;i<counts.tunnel;i++){
+    const seed = Math.random() * 999.0;
+
+    const ring = Math.floor(Math.random() * ringCount);
+    const z = - (ring / ringCount) * zSpan;
+
+    const ang = Math.random() * Math.PI * 2;
+    const r = baseR + (Math.random()-0.5)*thickness;
+
+    const x = Math.cos(ang) * r + (Math.random()-0.5)*0.35;
+    const y = Math.sin(ang) * r + (Math.random()-0.5)*0.35;
+
+    data[idx++] = x;
+    data[idx++] = y;
+    data[idx++] = z;
+    data[idx++] = seed;
+    data[idx++] = 0.0;
+  }
+
+  // B) stars
+  const starR = 46;
+  for(let i=0;i<counts.stars;i++){
+    const seed = Math.random() * 999.0;
+    let x,y;
+    while(true){
+      x = (Math.random()*2-1) * starR;
+      y = (Math.random()*2-1) * starR;
+      if(Math.hypot(x,y) > 16) break;
+    }
+    const z = -Math.random() * 220;
+
+    data[idx++] = x;
+    data[idx++] = y;
+    data[idx++] = z;
+    data[idx++] = seed;
+    data[idx++] = 1.0;
+  }
+  return data;
+}
+
+/* ============================================================
+   Buffer / VAO-ish
+   ============================================================ */
+const buf = gl.createBuffer();
+function uploadCloud(){
+  const cloud = buildCloud();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, cloud, gl.STATIC_DRAW);
+}
+uploadCloud();
+
+/* ============================================================
+   Fullscreen quad buffer
+   ============================================================ */
+const quad = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+  -1,-1,  1,-1, -1, 1,
+  -1, 1,  1,-1,  1, 1
+]), gl.STATIC_DRAW);
+
+/* ============================================================
+   Offscreen FBOs (Scene + Bloom pingpong)
+   ============================================================ */
+let sceneTex=null, sceneFBO=null;
+let blurTexA=null, blurFBOA=null;
+let blurTexB=null, blurFBOB=null;
+let offW=0, offH=0, blurW=0, blurH=0;
+
+function initOffscreen(){
+  // main offscreen same as canvas
+  offW = canvas.width;
+  offH = canvas.height;
+
+  // bloom at lower res (性能关键)
+  const bloomScale = 0.5; // 0.5 => 1/4 pixels
+  blurW = Math.max(2, Math.floor(offW * bloomScale));
+  blurH = Math.max(2, Math.floor(offH * bloomScale));
+
+  // cleanup old
+  if(sceneTex) gl.deleteTexture(sceneTex);
+  if(sceneFBO) gl.deleteFramebuffer(sceneFBO);
+  if(blurTexA) gl.deleteTexture(blurTexA);
+  if(blurFBOA) gl.deleteFramebuffer(blurFBOA);
+  if(blurTexB) gl.deleteTexture(blurTexB);
+  if(blurFBOB) gl.deleteFramebuffer(blurFBOB);
+
+  sceneTex = createTex(offW, offH, gl.LINEAR);
+  sceneFBO = createFBO(sceneTex);
+
+  blurTexA = createTex(blurW, blurH, gl.LINEAR);
+  blurFBOA = createFBO(blurTexA);
+
+  blurTexB = createTex(blurW, blurH, gl.LINEAR);
+  blurFBOB = createFBO(blurTexB);
+}
+initOffscreen();
+
+function scheduleRebuild(reinitOffscreen){
+  // 重建粒子 +（可选）重建FBO
+  uploadCloud();
+  if(reinitOffscreen){
+    initOffscreen();
+  }
+}
+let resizeTimer = 0;
+function scheduleRebuildDebounced(){
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(()=>{ scheduleRebuild(true); }, 140);
+}
+addEventListener("resize", scheduleRebuildDebounced);
+
+/* ============================================================
+   渲染状态
+   ============================================================ */
+gl.disable(gl.DEPTH_TEST);
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.ONE, gl.ONE);
+gl.clearColor(0.01, 0.02, 0.05, 1.0);
+
+/* ============================================================
+   相机矩阵
+   ============================================================ */
+const proj = mat4Identity();
+const view = mat4Identity();
+const rotX = mat4Identity();
+const rotY = mat4Identity();
+const trans= mat4Identity();
+
+/* ============================================================
+   FPS & Auto Quality
+   ============================================================ */
+let fpsAcc = 0, fpsCnt = 0, lastFpsT = performance.now();
+let avgFps = 60;
+
+function updateFps(now, dt){
+  fpsAcc += 1/dt;
+  fpsCnt++;
+  if(now - lastFpsT > 500){
+    avgFps = fpsAcc / Math.max(1, fpsCnt);
+    fpsAcc = 0; fpsCnt = 0; lastFpsT = now;
+    fpsPill.textContent = `FPS: ${avgFps.toFixed(0)}  粒子: ${counts.total}`;
+
+    if(state.autoQ === 1){
+      // 简单自适应：FPS < 45 降 density，FPS > 70 升一点（上限 1.3）
+      if(avgFps < 45 && state.density > 0.65){
+        state.density = Math.max(0.55, state.density * 0.92);
+        document.getElementById("uiDensity").value = String(state.density);
+        scheduleRebuild(false);
+      }else if(avgFps > 72 && state.density < 1.3){
+        state.density = Math.min(1.3, state.density * 1.03);
+        document.getElementById("uiDensity").value = String(state.density);
+        scheduleRebuild(false);
+      }
+    }
+  }
+}
+
+/* ============================================================
+   Draw helpers
+   ============================================================ */
+function bindParticlesAttrib(){
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  const stride = 5 * 4;
+  gl.enableVertexAttribArray(pLoc.aPos);
+  gl.vertexAttribPointer(pLoc.aPos, 3, gl.FLOAT, false, stride, 0);
+
+  gl.enableVertexAttribArray(pLoc.aSeed);
+  gl.vertexAttribPointer(pLoc.aSeed, 1, gl.FLOAT, false, stride, 3*4);
+
+  gl.enableVertexAttribArray(pLoc.aType);
+  gl.vertexAttribPointer(pLoc.aType, 1, gl.FLOAT, false, stride, 4*4);
+}
+
+function bindQuadAttrib(locApos){
+  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  gl.enableVertexAttribArray(locApos);
+  gl.vertexAttribPointer(locApos, 2, gl.FLOAT, false, 2*4, 0);
+}
+
+/* ============================================================
+   主循环
+   ============================================================ */
+let start = performance.now();
+let last = start;
+
+function frame(now){
+  const dt = Math.min(0.033, (now - last)/1000);
+  last = now;
+
+  if(state.paused){
+    requestAnimationFrame(frame);
+    return;
+  }
+
+  const t = (now - start) / 1000;
+
+  // 爆发衰减：更像“装置脉冲”
+  burst *= 0.92;
+  pulse *= 0.90;
+
+  // 平滑跟随鼠标
+  const follow = 0.06;
+  yaw   += (targetYaw   - yaw)   * follow;
+  pitch += (targetPitch - pitch) * follow;
+
+  // 脉冲带来的镜头轻微震荡（同向，不做反向旋转）
+  const camShake = pulse * 0.06;
+  const shakeX = (Math.sin(t*22.0) * 0.5 + Math.sin(t*37.0)*0.5) * camShake;
+  const shakeY = (Math.cos(t*18.0) * 0.5 + Math.sin(t*29.0)*0.5) * camShake;
+
+  const aspect = canvas.width / canvas.height;
+  mat4Perspective(proj, Math.PI/3.2, aspect, 0.1, 400.0);
+
+  mat4RotateX(rotX, pitch + shakeY);
+  mat4RotateY(rotY, yaw   + shakeX);
+  mat4Translate(trans, 0, 0, -24.0);
+
+  const tmp = mat4Identity();
+  mat4Mul(tmp, rotX, rotY);
+  mat4Mul(view, trans, tmp);
+
+  // ========= Pass 1: 粒子 -> Scene FBO =========
+  gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
+  gl.viewport(0,0,offW,offH);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  gl.useProgram(progParticles);
+  bindParticlesAttrib();
+
+  gl.uniformMatrix4fv(pLoc.uProj, false, proj);
+  gl.uniformMatrix4fv(pLoc.uView, false, view);
+  gl.uniform1f(pLoc.uTime, t);
+  gl.uniform1f(pLoc.uSpeed, state.speed);
+  gl.uniform1f(pLoc.uBurst, burst);
+  gl.uniform1f(pLoc.uPointBase, state.pointBase);
+  gl.uniform1i(pLoc.uPalette, state.palette);
+
+  gl.drawArrays(gl.POINTS, 0, counts.total);
+
+  // ========= Pass 2: Scene downsample -> blurA =========
+  // 直接用 blur shader 做一次“横向”模糊，兼顾降采样效果
+  gl.bindFramebuffer(gl.FRAMEBUFFER, blurFBOA);
+  gl.viewport(0,0,blurW,blurH);
+  gl.disable(gl.BLEND);
+
+  gl.useProgram(progBlur);
+  bindQuadAttrib(bLoc.aPos);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+  gl.uniform1i(bLoc.uTex, 0);
+  gl.uniform2f(bLoc.uDir, 1.0/offW, 0.0);
+  gl.uniform1f(bLoc.uRadius, state.bloomRadius);
+
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  // ========= Pass 3: blurA -> blurB（纵向） =========
+  gl.bindFramebuffer(gl.FRAMEBUFFER, blurFBOB);
+  gl.viewport(0,0,blurW,blurH);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, blurTexA);
+  gl.uniform1i(bLoc.uTex, 0);
+  gl.uniform2f(bLoc.uDir, 0.0, 1.0/blurH);
+  gl.uniform1f(bLoc.uRadius, state.bloomRadius);
+
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  // ========= Pass 4: Composite -> Screen =========
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0,0,canvas.width, canvas.height);
+
+  gl.useProgram(progComp);
+  bindQuadAttrib(cLoc.aPos);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+  gl.uniform1i(cLoc.uScene, 0);
+
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, blurTexB);
+  gl.uniform1i(cLoc.uBloom, 1);
+
+  // pulse 让 bloom/后处理也呼吸一下（更不单调）
+  const pulseBoost = pulse * 0.35;
+
+  gl.uniform1f(cLoc.uTime, t);
+  gl.uniform1f(cLoc.uBloomAmt, Math.max(0.0, state.bloom + pulseBoost));
+  gl.uniform1f(cLoc.uChroma, Math.max(0.0, state.chroma + pulseBoost*0.15));
+  gl.uniform1f(cLoc.uGlitch, Math.max(0.0, state.glitch + pulseBoost*0.30));
+  gl.uniform1f(cLoc.uScan, state.scan);
+  gl.uniform1f(cLoc.uVig, state.vignette);
+
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  // 恢复 additive（给下一帧粒子用）
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.ONE, gl.ONE);
+
+  // FPS/自适应
+  updateFps(now, dt);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---------- 窗口变化时：重建离屏资源 ---------- */
+addEventListener("resize", ()=>{
+  initOffscreen();
+});
+
+/* ---------- 页面加载后：同步 UI 显示值 ---------- */
+(function initUI(){
+  document.getElementById("uiPalette").value = String(state.palette);
+  document.getElementById("uiAutoQ").value = String(state.autoQ);
+})();
+
+</script>
+</body>
+</html>
